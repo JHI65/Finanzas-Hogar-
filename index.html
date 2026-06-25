@@ -350,6 +350,7 @@ async function load(){
   }
   delete S.cfg.repartoAhorro; delete S.cfg.repartoInversion; delete S.cfg.repartoCaprichos;
   ['pareja','facturas','diariosJaime','diariosClaudia','fijosJaime','fijosClaudia','ahorrosJaime','ahorrosClaudia'].forEach(k=>{ if(!S[k]) S[k]=[]; });
+  if(!S.liquidado) S.liquidado={};
   S.pareja.forEach(g=>{ if(!g.meses){ g.importeBase=(g.importe||0)*(PERIOD[g.period]||1); g.meses={}; delete g.importe; delete g.period; } });
   ['fijosJaime','fijosClaudia'].forEach(k=>S[k].forEach(f=>{ if(!f.meses){ f.importeBase=(f.importe||0)*(PERIOD[f.period]||1); f.meses={}; delete f.importe; delete f.period; } }));
 }
@@ -438,19 +439,24 @@ function viewPanel(){
   const isJ=who==='jaime'; const p=panel(who); const name=isJ?'Jaime':'Claudia';
   const bal=p.balance; const balPos=bal>=0;
   let liqHtml='';
-  if(Math.abs(bal)>0.5){
+  const yaLiquidado = !!(S.liquidado[who] && S.liquidado[who][currentSelMonth]);
+  if(Math.abs(bal)>0.5 && !yaLiquidado){
     const other=isJ?'Claudia':'Jaime';
-    const liquidarBtn = !balPos
+    const checkBtn = !balPos
       ? `<button onclick="liquidarDeuda(${Math.abs(bal).toFixed(2)},'${other}')"
-           style="margin-top:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
-           color:var(--txt);padding:8px 20px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
-           Liquidar deuda</button>`
+           title="Liquidar deuda"
+           style="flex:none;width:36px;height:36px;border-radius:50%;border:2px solid var(--red);
+           background:transparent;color:var(--red);font-size:18px;cursor:pointer;line-height:1">✓</button>`
       : '';
-    liqHtml = `<div class="liq ${balPos?'pos':'neg'}">
-      <div class="l">Liquidación con ${other}</div>
-      <div class="v">${EUR(Math.abs(bal))}</div>
-      <div class="who">${balPos?`${other} te debe`:`Debes a ${other}`}</div>
-      ${liquidarBtn}
+    liqHtml = `<div style="display:flex;align-items:center;gap:12px;
+        background:${balPos?'var(--green-bg)':'#3a1b1b'};
+        border:1px solid ${balPos?'#1d6b45':'#7a3030'};
+        border-radius:14px;padding:10px 14px;margin-bottom:14px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;color:var(--muted);font-weight:600">${balPos?`${other} te debe`:`Debes a ${other}`}</div>
+        <div style="font-size:20px;font-weight:800;color:${balPos?'var(--green)':'var(--red)'};white-space:nowrap">${EUR(Math.abs(bal))}</div>
+      </div>
+      ${checkBtn}
     </div>`;
   }
   const reparto = [
@@ -894,6 +900,8 @@ async function liquidarDeuda(importe, other){
   if(!confirm(`¿Registrar pago de ${EUR(importe)} a ${other} como gasto diario?`)) return;
   const arr = diarios(who);
   arr.unshift({id:uid(), importe, fecha:todayISO(), concepto:`Liquidación con ${other}`, categoria:'Otros'});
+  if(!S.liquidado[who]) S.liquidado[who]={};
+  S.liquidado[who][currentSelMonth]=true;
   await save(); render();
 }
 
