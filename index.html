@@ -409,6 +409,20 @@ function fijosTotal(w,month){ return fijos(w).reduce((s,f)=>s+getMesImporte(f,mo
 function diarios(w){ return w==='jaime'?S.diariosJaime:S.diariosClaudia; }
 function diariosDelMes(w,month){ return diarios(w).filter(d=>(d.fecha||'').startsWith(month||currentSelMonth)); }
 function diariosTotal(w,month){ return diariosDelMes(w,month).reduce((s,d)=>s+(+d.importe||0),0); }
+function ivaMes(month){
+  return S.facturas.filter(f=>(f.fecha||'').startsWith(month)).reduce((s,f)=>s+f.base*(f.iva||0),0);
+}
+function ivaAcumuladoTrimestre(month){
+  const[y,m]=month.split('-').map(Number);
+  const startM=(Math.ceil(m/3)-1)*3+1;
+  let total=0;
+  for(let mo=startM;mo<=m;mo++) total+=ivaMes(y+'-'+String(mo).padStart(2,'0'));
+  return total;
+}
+function quarterLabel(month){
+  const[y,m]=month.split('-').map(Number);
+  return 'T'+Math.ceil(m/3)+' '+y;
+}
 function earliestDataMonth(w){
   const dates=[];
   if(w==='jaime') S.facturas.filter(f=>f.cobrada&&f.fecha).forEach(f=>dates.push(f.fecha.slice(0,7)));
@@ -425,7 +439,8 @@ function saldoAnteriorAcumulado(w,upToMonth){
     const ing=w==='jaime'?ingresoJaimeMes(m):ingresoClaudiaMes(m);
     const pm=parejaMes(m);
     const partePareja=w==='jaime'?pm.parteJ:pm.parteC;
-    saldo+=ing-fijosTotal(w,m)-partePareja-diariosTotal(w,m);
+    const ivaM=w==='jaime'?ivaMes(m):0;
+    saldo+=ing-fijosTotal(w,m)-partePareja-ivaM-diariosTotal(w,m);
     m=nextMonth(m);
   }
   return saldo;
@@ -438,7 +453,8 @@ function panel(w){
   const saldoAnt = saldoAnteriorAcumulado(w, currentSelMonth);
   const partePareja = w==='jaime'?pm.parteJ:pm.parteC;
   const fijosMes = fijosTotal(w);
-  const comprometido = fijosMes + partePareja;
+  const ivaQ = w==='jaime' ? ivaAcumuladoTrimestre(currentSelMonth) : 0;
+  const comprometido = fijosMes + partePareja + ivaQ;
   const gastosDiarios = diariosTotal(w);
   const disponible = saldoAnt + ingreso - comprometido - gastosDiarios;
   const suf=w==='jaime'?'J':'C';
@@ -450,7 +466,7 @@ function panel(w){
   const ingresoCount = w==='jaime'
     ? S.facturas.filter(f=>f.cobrada&&(f.fecha||'').startsWith(currentSelMonth)).length
     : S.nominasClaudia.filter(n=>(n.fecha||'').startsWith(currentSelMonth)).length;
-  return {ingreso,saldoAnt,partePareja,fijosMes,comprometido,disponible,ahorro,inversion,caprichos,gastosDiarios,balance,ingresoCount,rA,rI,rC};
+  return {ingreso,saldoAnt,partePareja,fijosMes,ivaQ,comprometido,disponible,ahorro,inversion,caprichos,gastosDiarios,balance,ingresoCount,rA,rI,rC};
 }
 
 // ---- rendering ----
@@ -523,10 +539,20 @@ function viewPanel(){
         <div class="mini" onclick="${ingresoOnclick}" style="cursor:pointer;active:opacity:.7"><div class="l" style="display:flex;align-items:center;gap:4px">${ingresoLabel}<span style="font-size:10px;opacity:.5">›</span></div><div class="v">${EUR0(p.ingreso)}</div></div>
       </div>
       <div class="row2" style="margin-top:8px">
-        <div class="mini"><div class="l">Comprometido</div><div class="v" style="color:var(--red)">${EUR0(p.comprometido)}</div></div>
+        <div class="mini"><div class="l">Comprometido${isJ&&p.ivaQ>0?' · IVA inc.':''}</div><div class="v" style="color:var(--red)">${EUR0(p.comprometido)}</div></div>
         <div class="mini"><div class="l">Diarios</div><div class="v" style="color:var(--amber)">${EUR0(p.gastosDiarios)}</div></div>
       </div>
     </div>
+    ${isJ&&p.ivaQ>0?`<div style="display:flex;align-items:center;gap:12px;
+        background:var(--amber-bg);border:1px solid #4a3808;
+        border-radius:14px;padding:10px 14px;margin-bottom:14px">
+      <span style="font-size:20px">🧾</span>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--muted);font-weight:600">IVA trimestral acumulado · ${quarterLabel(currentSelMonth)}</div>
+        <div style="font-size:20px;font-weight:800;color:var(--amber)">${EUR(p.ivaQ)}</div>
+      </div>
+      <span style="font-size:11px;color:var(--dim);font-weight:600;text-align:right">declaración<br>trimestral</span>
+    </div>`:''}
     ${ahorrosBadge(who)}
     ${liqHtml}
   </section>
