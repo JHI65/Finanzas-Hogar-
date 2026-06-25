@@ -548,18 +548,20 @@ function viewPanel(){
         <div class="mini"><div class="l">Diarios gastados</div><div class="v" style="color:var(--amber)">${EUR0(p.gastosDiarios)}</div></div>
       </div>
     </div>
-    ${isJ&&p.ivaQ>0?`<div style="background:var(--amber-bg);border:1px solid #4a3808;
-        border-radius:14px;padding:10px 14px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <span style="font-size:18px">🧾</span>
-        <div style="flex:1">
-          <div style="font-size:11px;color:var(--muted);font-weight:600">IVA trimestral acumulado · ${quarterLabel(currentSelMonth)}</div>
-          <div style="font-size:20px;font-weight:800;color:var(--amber)">${EUR(p.ivaQ)}</div>
+    ${isJ&&p.ivaQ>0?`<div style="background:var(--amber-bg);border:1px solid #4a3808;border-radius:14px;padding:12px 14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">🧾</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.8px;text-transform:uppercase">IVA trimestral · ${quarterLabel(currentSelMonth)}</div>
+          <div style="font-size:24px;font-weight:800;color:var(--amber);line-height:1.15">${EUR(p.ivaQ)}</div>
         </div>
       </div>
-      <div style="border-top:1px solid #4a3808;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:12px;color:var(--muted);font-weight:600">Necesario en cuenta · Comprometido + IVA</span>
-        <span style="font-size:17px;font-weight:800;color:var(--amber)">${EUR0(p.comprometido+p.ivaQ)}</span>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #5a3f10;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="min-width:0">
+          <div style="font-size:12px;font-weight:700;color:var(--txt)">Necesario en cuenta</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:1px">Comprometido + IVA</div>
+        </div>
+        <div style="font-size:22px;font-weight:800;color:var(--amber);white-space:nowrap;flex:none">${EUR0(p.comprometido+p.ivaQ)}</div>
       </div>
     </div>`:''}
     ${ahorrosBadge(who)}
