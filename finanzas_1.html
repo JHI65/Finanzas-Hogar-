@@ -439,7 +439,7 @@ function viewPanel(){
   const isJ=who==='jaime'; const p=panel(who); const name=isJ?'Jaime':'Claudia';
   const bal=p.balance; const balPos=bal>=0;
   let liqHtml='';
-  const yaLiquidado = !!(S.liquidado[who] && S.liquidado[who][currentSelMonth]);
+  const yaLiquidado = diariosDelMes(who).some(d=>d.concepto&&d.concepto.startsWith('Liquidación con '));
   if(Math.abs(bal)>0.5 && !yaLiquidado){
     const other=isJ?'Claudia':'Jaime';
     const checkBtn = !balPos
@@ -559,6 +559,16 @@ function viewPareja(){
     </div>`;
   }).join('') || `<div class="empty">Sin gastos de pareja.</div>`;
   const balPos=pm.balanceJ>=0;
+  const liqJ = diariosDelMes('jaime').some(d=>d.concepto&&d.concepto.startsWith('Liquidación con '));
+  const liqC = diariosDelMes('claudia').some(d=>d.concepto&&d.concepto.startsWith('Liquidación con '));
+  const deudor = balPos?'claudia':'jaime';
+  const saldado = deudor==='jaime'?liqJ:liqC;
+  const saldadoHtml = saldado
+    ? `<div style="display:flex;align-items:center;gap:8px;margin-top:10px;
+          background:var(--green-bg);border:1px solid #1d6b45;border-radius:10px;padding:8px 12px">
+        <span style="color:var(--green);font-size:16px">✓</span>
+        <span style="font-size:13px;font-weight:600;color:var(--green)">Saldado · ${deudor==='jaime'?'Jaime':'Claudia'} ha pagado</span>
+      </div>` : '';
   return `
   <section>
     ${monthNavHTML()}
@@ -570,6 +580,7 @@ function viewPareja(){
       <div class="l">Liquidación del mes</div>
       <div class="v">${EUR(Math.abs(pm.balanceJ))}</div>
       <div class="who">${balPos?'Claudia debe a Jaime':'Jaime debe a Claudia'}</div>
+      ${saldadoHtml}
     </div>
     <div class="card">
       <div class="hd"><h3>Gastos compartidos</h3><span class="sum">${EUR0(pm.totalMes)}/mes</span></div>
@@ -900,8 +911,6 @@ async function liquidarDeuda(importe, other){
   if(!confirm(`¿Registrar pago de ${EUR(importe)} a ${other} como gasto diario?`)) return;
   const arr = diarios(who);
   arr.unshift({id:uid(), importe, fecha:todayISO(), concepto:`Liquidación con ${other}`, categoria:'Otros'});
-  if(!S.liquidado[who]) S.liquidado[who]={};
-  S.liquidado[who][currentSelMonth]=true;
   await save(); render();
 }
 
