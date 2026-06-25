@@ -459,11 +459,18 @@ function viewPanel(){
   <section>
     ${monthNavHTML()}
     <div class="hero ${isJ?'j':'c'}">
-      <div class="lab">Disponible · mes</div>
-      <div class="big" style="color:var(--green)">${EUR0(p.disponible)}</div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div>
+          <div class="lab">Disponible · mes</div>
+          <div class="big" style="color:${p.disponible>=0?'var(--green)':'var(--red)'}">${EUR0(p.disponible)}</div>
+        </div>
+        <div style="text-align:right;padding-top:2px">
+          <div class="lab">Comprometido</div>
+          <div style="font-size:22px;font-weight:700;color:var(--red);white-space:nowrap">${EUR0(p.comprometido)}</div>
+        </div>
+      </div>
       <div class="row2">
         <div class="mini"><div class="l">${ingresoLabel}</div><div class="v">${EUR0(p.ingreso)}</div></div>
-        <div class="mini"><div class="l">Comprometido</div><div class="v" style="color:var(--red)">${EUR0(p.comprometido)}</div></div>
         <div class="mini"><div class="l">Diarios</div><div class="v" style="color:var(--amber)">${EUR0(p.gastosDiarios)}</div></div>
       </div>
     </div>
