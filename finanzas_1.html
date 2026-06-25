@@ -467,6 +467,7 @@ function viewPanel(){
         <div class="mini"><div class="l">Disponible</div><div class="v" style="color:var(--green)">${EUR0(p.disponible)}</div></div>
       </div>
     </div>
+    ${ahorrosBadge(who)}
     ${liqHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
       <div class="stat"><div class="l">Fijos</div><div class="v ${isJ?'j':'c'}">${EUR0(p.fijosMes)}</div></div>
@@ -483,7 +484,7 @@ function viewPanel(){
       </div>`).join('')}
     </div>
   </section>
-  ${viewAhorrosPanel(who)}`;
+`;
 }
 
 function viewDiarios(){
@@ -802,35 +803,44 @@ async function delFijo(id){
   await save(); closeSheet(); render();
 }
 
-// ahorros panel section
-function viewAhorrosPanel(w){
+// ahorros panel badge (compact) + detail sheet
+function ahorrosBadge(w){
+  const total = ahorrosTotal(w);
+  const list = ahorros(w);
+  const color = total>=0?'var(--green)':'var(--red)';
+  return `<div onclick="openAhorrosSheet('${w}')" style="display:flex;align-items:center;justify-content:space-between;
+      background:var(--panel);border:1px solid var(--line);border-radius:14px;
+      padding:12px 16px;margin-bottom:14px;cursor:pointer">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">🏦</span>
+      <div>
+        <div style="font-size:12px;color:var(--muted);font-weight:600">Mis ahorros</div>
+        <div style="font-size:20px;font-weight:800;color:${color};line-height:1.2">${EUR0(total)}</div>
+      </div>
+    </div>
+    <button onclick="event.stopPropagation();editAhorro(null)" style="background:var(--green-bg);border:1px solid var(--green);color:var(--green);padding:7px 14px;border-radius:10px;font-size:13px;font-weight:700">+ Añadir</button>
+  </div>`;
+}
+function openAhorrosSheet(w){
   const total = ahorrosTotal(w);
   const list = ahorros(w).slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||b.id.localeCompare(a.id));
-  const recent = list.slice(0,5);
-  const rows = recent.length ? recent.map(a=>{
+  const rows = list.length ? list.map(a=>{
     const esR = a.tipo==='retirada';
     return `<div class="li" onclick='editAhorro(${JSON.stringify(a.id)})'>
       <div class="ico">${esR?'↑':'↓'}</div>
       <div class="mid"><div class="t">${esc(a.concepto||a.tipo)}</div>
         <div class="s">${fmtDate(a.fecha)}</div></div>
-      <div class="amt" style="color:${esR?'var(--red)':'var(--green)'}">${esR?'-':'+'} ${EUR(+a.importe||0)}</div>
+      <div class="amt" style="color:${esR?'var(--red)':'var(--green)'}">${esR?'−':'+'}${EUR(+a.importe||0)}</div>
     </div>`;
   }).join('') : `<div class="empty">Sin movimientos aún.</div>`;
-  return `<section>
-    <p class="eyebrow">Mis ahorros</p>
-    <div class="card">
-      <div class="hd">
-        <h3>Saldo acumulado</h3>
-        <button onclick="editAhorro(null)" style="background:var(--green-bg);border:1px solid var(--green);color:var(--green);padding:6px 14px;border-radius:10px;font-size:13px;font-weight:700">+ Añadir</button>
-      </div>
-      <div style="padding:20px 16px 12px;text-align:center;border-bottom:1px solid var(--line)">
-        <div style="font-size:36px;font-weight:800;color:${total>=0?'var(--green)':'var(--red)'}">${EUR0(total)}</div>
-        <div style="font-size:12px;color:var(--dim);margin-top:4px">${list.length} movimiento${list.length!==1?'s':''}</div>
-      </div>
-      ${rows}
-      ${list.length>5?`<div style="padding:10px 16px;text-align:center;font-size:13px;color:var(--muted)">${list.length-5} movimiento${list.length-5!==1?'s':''} más</div>`:''}
-    </div>
-  </section>`;
+  openSheet(shHead('Mis ahorros')+`<div style="padding:16px 18px 8px;text-align:center;border-bottom:1px solid var(--line)">
+    <div style="font-size:36px;font-weight:800;color:${total>=0?'var(--green)':'var(--red)'}">${EUR0(total)}</div>
+    <div style="font-size:12px;color:var(--dim);margin-top:4px">${list.length} movimiento${list.length!==1?'s':''}</div>
+  </div>
+  <div style="padding:10px 18px 18px">
+    <button class="save" onclick="closeSheet();editAhorro(null)">+ Añadir movimiento</button>
+  </div>
+  ${rows}`);
 }
 
 let _ahorroTipoSel='deposito';
