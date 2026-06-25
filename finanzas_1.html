@@ -395,14 +395,29 @@ function ingresoClaudiaMes(month){
   if(noms.length) return noms.reduce((s,n)=>s+(+n.importe||0),0);
   return S.cfg.ingresoClaudia||0;
 }
-function proporciones(month){
-  const ij=ingresoJaimeMes(month||currentSelMonth);
-  const ic=ingresoClaudiaMes(month||currentSelMonth);
+function promedioMensualJaime(){
+  const facts=S.facturas.filter(f=>f.cobrada&&f.fecha);
+  if(!facts.length) return 0;
+  const total=facts.reduce((s,f)=>s+f.base-f.base*(f.ret||0)-f.base*(S.cfg.reservaIRPF||0),0);
+  const meses=new Set(facts.map(f=>f.fecha.slice(0,7))).size;
+  return total/Math.max(1,meses);
+}
+function promedioMensualClaudia(){
+  if(S.nominasClaudia.length){
+    const total=S.nominasClaudia.reduce((s,n)=>s+(+n.importe||0),0);
+    const meses=new Set(S.nominasClaudia.filter(n=>n.fecha).map(n=>n.fecha.slice(0,7))).size;
+    return total/Math.max(1,meses);
+  }
+  return S.cfg.ingresoClaudia||0;
+}
+function proporciones(){
+  const ij=promedioMensualJaime();
+  const ic=promedioMensualClaudia();
   const tot=ij+ic||1;
   return {j:ij/tot, c:ic/tot};
 }
 function parejaMes(month){
-  const m=month||currentSelMonth; const p=proporciones(m);
+  const m=month||currentSelMonth; const p=proporciones();
   let totalMes=0,parteJ=0,parteC=0,bolsilloJ=0,compartidoBolsillo=0;
   parejaDelMes(m).forEach(g=>{
     const mes=getParejaImporte(g,m);
