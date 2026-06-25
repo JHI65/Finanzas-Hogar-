@@ -331,7 +331,13 @@ function getParejaImporte(item,month){
   return item.meses[month]!==undefined ? item.meses[month] : 0;
 }
 function parejaDelMes(month){
-  return S.pareja.filter(g=>g.mantener!==false||(g.meses&&g.meses[month]!==undefined));
+  return S.pareja.filter(g=>{
+    if(g.meses&&g.meses[month]!==undefined) return true;
+    if(g.mantener!==false) return true;
+    // mantener=false: show in months up to and including the last month with an entry
+    const last=Object.keys(g.meses||{}).sort().pop();
+    return last&&month<=last;
+  });
 }
 const monthNavHTML=()=>`<div class="month-nav">
   <button onclick="shiftMonth(-1)">‹</button>
@@ -711,7 +717,8 @@ function editPareja(id){
 }
 function pickPag(btn,val){ _pagSel=val; btn.parentNode.querySelectorAll('button').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); }
 async function savePareja(id){
-  const imp=parseFloat(document.getElementById('p_imp').value);
+  const impRaw=document.getElementById('p_imp').value;
+  const imp=impRaw===''?0:parseFloat(impRaw);
   const con=document.getElementById('p_con').value.trim();
   if(!con||isNaN(imp)||imp<0) return;
   const m=currentSelMonth;
