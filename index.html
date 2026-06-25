@@ -330,6 +330,9 @@ function getParejaImporte(item,month){
   if(!item.meses) return 0;
   return item.meses[month]!==undefined ? item.meses[month] : 0;
 }
+function parejaDelMes(month){
+  return S.pareja.filter(g=>g.mantener!==false||(g.meses&&g.meses[month]!==undefined));
+}
 const monthNavHTML=()=>`<div class="month-nav">
   <button onclick="shiftMonth(-1)">‹</button>
   <span class="mn-label">${monthLabel(currentSelMonth)}</span>
@@ -355,7 +358,7 @@ async function load(){
   delete S.cfg.repartoAhorro; delete S.cfg.repartoInversion; delete S.cfg.repartoCaprichos;
   ['pareja','facturas','diariosJaime','diariosClaudia','fijosJaime','fijosClaudia','ahorrosJaime','ahorrosClaudia'].forEach(k=>{ if(!S[k]) S[k]=[]; });
   if(!S.liquidado) S.liquidado={};
-  S.pareja.forEach(g=>{ if(!g.meses){ g.importeBase=(g.importe||0)*(PERIOD[g.period]||1); g.meses={}; delete g.importe; delete g.period; } });
+  S.pareja.forEach(g=>{ if(!g.meses){ g.importeBase=(g.importe||0)*(PERIOD[g.period]||1); g.meses={}; delete g.importe; delete g.period; } if(g.mantener===undefined) g.mantener=true; });
   ['fijosJaime','fijosClaudia'].forEach(k=>S[k].forEach(f=>{ if(!f.meses){ f.importeBase=(f.importe||0)*(PERIOD[f.period]||1); f.meses={}; delete f.importe; delete f.period; } }));
 }
 async function save(){
@@ -380,7 +383,7 @@ function proporciones(){
 function parejaMes(){
   const m=currentSelMonth; const p=proporciones();
   let totalMes=0,parteJ=0,parteC=0,bolsilloJ=0,compartidoBolsillo=0;
-  S.pareja.forEach(g=>{
+  parejaDelMes(m).forEach(g=>{
     const mes=getParejaImporte(g,m);
     totalMes+=mes; parteJ+=mes*p.j; parteC+=mes*p.c;
     if(g.pagador==='Jaime'){ bolsilloJ+=mes; compartidoBolsillo+=mes; }
@@ -552,7 +555,7 @@ function donutSVG(cats,total){
 
 function viewPareja(){
   const pm=parejaMes(); const p=pm.prop; const m=currentSelMonth;
-  const rows = S.pareja.map(g=>{
+  const rows = parejaDelMes(m).map(g=>{
     const mes=getParejaImporte(g,m);
     const tagC=g.pagador==='Jaime'?'j':g.pagador==='Claudia'?'c':'k';
     return `<div class="li" onclick='editPareja(${JSON.stringify(g.id)})'>
@@ -698,6 +701,10 @@ function editPareja(id){
     <div class="fld"><label>Pagado por</label>
       <div class="chips" id="p_pag">${['Jaime','Claudia','Conjunta'].map(k=>`<button class="${k===_pagSel?'sel':''}" onclick="pickPag(this,'${k}')">${k}</button>`).join('')}</div>
     </div>
+    <div class="fld" style="display:flex;align-items:center;gap:10px;margin-top:4px">
+      <input type="checkbox" id="p_man" style="width:18px;height:18px;accent-color:var(--green);cursor:pointer" ${g===null||g.mantener!==false?'checked':''}>
+      <label for="p_man" style="font-size:14px;color:var(--txt);cursor:pointer;margin:0">Mantener mes siguiente</label>
+    </div>
     <button class="save" onclick='savePareja(${id?JSON.stringify(id):"null"})'>${id?'Guardar':'Añadir gasto'}</button>
     ${id?`<button class="del" onclick='delPareja("${id}")'>Eliminar</button>`:''}
   </div>`);
@@ -708,12 +715,13 @@ async function savePareja(id){
   const con=document.getElementById('p_con').value.trim();
   if(!con||isNaN(imp)||imp<0) return;
   const m=currentSelMonth;
+  const man=document.getElementById('p_man').checked;
   if(id){
     const i=S.pareja.findIndex(x=>x.id===id);
     if(!S.pareja[i].meses) S.pareja[i].meses={};
-    S.pareja[i].concepto=con; S.pareja[i].pagador=_pagSel; S.pareja[i].meses[m]=imp;
+    S.pareja[i].concepto=con; S.pareja[i].pagador=_pagSel; S.pareja[i].meses[m]=imp; S.pareja[i].mantener=man;
   } else {
-    S.pareja.push({id:uid(),concepto:con,pagador:_pagSel,importeBase:imp,meses:{[m]:imp}});
+    S.pareja.push({id:uid(),concepto:con,pagador:_pagSel,importeBase:imp,meses:{[m]:imp},mantener:man});
   }
   await save(); closeSheet(); render();
 }
