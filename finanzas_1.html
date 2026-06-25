@@ -452,28 +452,23 @@ function viewPanel(){
     ['Caprichos',p.caprichos,'var(--amber)',p.rC]
   ];
   const maxR=Math.max(...reparto.map(r=>r[1]),1);
-  const heroSub = isJ
-    ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">Suma neta de ${p.facturasCount} factura${p.facturasCount!==1?'s':''} cobrada${p.facturasCount!==1?'s':''}</div>`
-    : `<button onclick="editSueldoClaudia()" style="margin-top:8px;background:rgba(255,255,255,.07);border:1px solid var(--line);color:var(--muted);padding:6px 12px;border-radius:9px;font-size:12px;font-weight:600">Editar sueldo</button>`;
+  const ingresoLabel = isJ
+    ? `${isJ?'Ingreso neto':'Sueldo'} · ${p.facturasCount} factura${p.facturasCount!==1?'s':''}`
+    : `<span onclick="editSueldoClaudia()" style="cursor:pointer;border-bottom:1px dashed var(--muted)">Sueldo neto · editar</span>`;
   return `
   <section>
     ${monthNavHTML()}
     <div class="hero ${isJ?'j':'c'}">
-      <div class="lab">${isJ?'Ingreso neto · facturas':'Sueldo neto'} · mes</div>
-      <div class="big">${EUR0(p.ingreso)}</div>
-      ${heroSub}
+      <div class="lab">Disponible · mes</div>
+      <div class="big" style="color:var(--green)">${EUR0(p.disponible)}</div>
       <div class="row2">
+        <div class="mini"><div class="l">${ingresoLabel}</div><div class="v">${EUR0(p.ingreso)}</div></div>
         <div class="mini"><div class="l">Comprometido</div><div class="v" style="color:var(--red)">${EUR0(p.comprometido)}</div></div>
-        <div class="mini"><div class="l">Disponible</div><div class="v" style="color:var(--green)">${EUR0(p.disponible)}</div></div>
+        <div class="mini"><div class="l">Diarios</div><div class="v" style="color:var(--amber)">${EUR0(p.gastosDiarios)}</div></div>
       </div>
     </div>
     ${ahorrosBadge(who)}
     ${liqHtml}
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
-      <div class="stat"><div class="l">Fijos</div><div class="v ${isJ?'j':'c'}">${EUR0(p.fijosMes)}</div></div>
-      <div class="stat"><div class="l">Parte pareja</div><div class="v ${isJ?'j':'c'}">${EUR0(p.partePareja)}</div></div>
-      <div class="stat"><div class="l">Diarios</div><div class="v amber">${EUR0(p.gastosDiarios)}</div></div>
-    </div>
   </section>
   <section>
     <p class="eyebrow">Reparto del disponible</p>
