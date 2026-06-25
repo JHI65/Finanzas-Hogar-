@@ -287,7 +287,8 @@ const PERIOD = {'Mensual':1,'Anual':1/12,'Trimestral':1/3};
 const DEFAULT = {
   cfg:{
     ingresoClaudia:1500,
-    repartoAhorro:0.4, repartoInversion:0.3, repartoCaprichos:0.3,
+    repartoAhorroJ:0.4, repartoInversionJ:0.3, repartoCaprichosJ:0.3,
+    repartoAhorroC:0.4, repartoInversionC:0.3, repartoCaprichosC:0.3,
     ivaDef:0.21, retDef:0.15, reservaIRPF:0.2
   },
   pareja:[
@@ -340,6 +341,12 @@ async function load(){
   if(!S){ S = JSON.parse(JSON.stringify(DEFAULT)); await save(); }
   S.cfg = Object.assign({}, DEFAULT.cfg, S.cfg||{});
   delete S.cfg.ingresoJaime;
+  // migrate old shared reparto to individual
+  if(S.cfg.repartoAhorro!==undefined && S.cfg.repartoAhorroJ===undefined){
+    S.cfg.repartoAhorroJ=S.cfg.repartoAhorro; S.cfg.repartoInversionJ=S.cfg.repartoInversion; S.cfg.repartoCaprichosJ=S.cfg.repartoCaprichos;
+    S.cfg.repartoAhorroC=S.cfg.repartoAhorro; S.cfg.repartoInversionC=S.cfg.repartoInversion; S.cfg.repartoCaprichosC=S.cfg.repartoCaprichos;
+  }
+  delete S.cfg.repartoAhorro; delete S.cfg.repartoInversion; delete S.cfg.repartoCaprichos;
   ['pareja','facturas','diariosJaime','diariosClaudia','fijosJaime','fijosClaudia'].forEach(k=>{ if(!S[k]) S[k]=[]; });
   S.pareja.forEach(g=>{ if(!g.meses){ g.importeBase=(g.importe||0)*(PERIOD[g.period]||1); g.meses={}; delete g.importe; delete g.period; } });
   ['fijosJaime','fijosClaudia'].forEach(k=>S[k].forEach(f=>{ if(!f.meses){ f.importeBase=(f.importe||0)*(PERIOD[f.period]||1); f.meses={}; delete f.importe; delete f.period; } }));
@@ -388,13 +395,15 @@ function panel(w){
   const fijosMes = fijosTotal(w);
   const comprometido = fijosMes + partePareja;
   const disponible = ingreso - comprometido;
-  const ahorro = disponible*S.cfg.repartoAhorro;
-  const inversion = disponible*S.cfg.repartoInversion;
-  const caprichos = disponible*S.cfg.repartoCaprichos;
+  const suf=w==='jaime'?'J':'C';
+  const rA=S.cfg['repartoAhorro'+suf]||0, rI=S.cfg['repartoInversion'+suf]||0, rC=S.cfg['repartoCaprichos'+suf]||0;
+  const ahorro = disponible*rA;
+  const inversion = disponible*rI;
+  const caprichos = disponible*rC;
   const gastosDiarios = diariosTotal(w);
   const balance = w==='jaime'?pm.balanceJ:-pm.balanceJ;
   const facturasCount = S.facturas.filter(f=>f.cobrada).length;
-  return {ingreso,partePareja,fijosMes,comprometido,disponible,ahorro,inversion,caprichos,gastosDiarios,balance,facturasCount};
+  return {ingreso,partePareja,fijosMes,comprometido,disponible,ahorro,inversion,caprichos,gastosDiarios,balance,facturasCount,rA,rI,rC};
 }
 
 // ---- rendering ----
@@ -434,9 +443,9 @@ function viewPanel(){
     </div>`;
   }
   const reparto = [
-    ['Ahorro',p.ahorro,'var(--green)',S.cfg.repartoAhorro],
-    ['Inversión',p.inversion,'var(--purple)',S.cfg.repartoInversion],
-    ['Caprichos',p.caprichos,'var(--amber)',S.cfg.repartoCaprichos]
+    ['Ahorro',p.ahorro,'var(--green)',p.rA],
+    ['Inversión',p.inversion,'var(--purple)',p.rI],
+    ['Caprichos',p.caprichos,'var(--amber)',p.rC]
   ];
   const maxR=Math.max(...reparto.map(r=>r[1]),1);
   const heroSub = isJ
@@ -790,20 +799,22 @@ async function delFijo(id){
 
 // settings / config
 function openSettings(){
-  const c=S.cfg;
-  openSheet(shHead('Configuración')+`<div class="form">
-    <p class="eyebrow">Reparto del disponible</p>
+  const c=S.cfg; const isJ=who==='jaime'; const suf=isJ?'J':'C'; const name=isJ?'Jaime':'Claudia';
+  openSheet(shHead('Configuración · '+name)+`<div class="form">
+    <p class="eyebrow">Reparto del disponible · ${name}</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-      <div class="fld"><label>Ahorro %</label><input id="s_aho" type="number" inputmode="decimal" value="${Math.round(c.repartoAhorro*100)}"></div>
-      <div class="fld"><label>Inversión %</label><input id="s_inv" type="number" inputmode="decimal" value="${Math.round(c.repartoInversion*100)}"></div>
-      <div class="fld"><label>Caprichos %</label><input id="s_cap" type="number" inputmode="decimal" value="${Math.round(c.repartoCaprichos*100)}"></div>
+      <div class="fld"><label>Ahorro %</label><input id="s_aho" type="number" inputmode="decimal" value="${Math.round((c['repartoAhorro'+suf]||0)*100)}"></div>
+      <div class="fld"><label>Inversión %</label><input id="s_inv" type="number" inputmode="decimal" value="${Math.round((c['repartoInversion'+suf]||0)*100)}"></div>
+      <div class="fld"><label>Caprichos %</label><input id="s_cap" type="number" inputmode="decimal" value="${Math.round((c['repartoCaprichos'+suf]||0)*100)}"></div>
     </div>
+    ${isJ?`
     <p class="eyebrow" style="margin-top:16px">Fiscal · autónomo</p>
     <div class="two">
       <div class="fld"><label>IVA por defecto %</label><input id="s_iva" type="number" inputmode="decimal" value="${Math.round(c.ivaDef*100)}"></div>
       <div class="fld"><label>Retención por defecto %</label><input id="s_ret" type="number" inputmode="decimal" value="${Math.round(c.retDef*100)}"></div>
     </div>
     <div class="fld" style="max-width:50%"><label>Reserva IRPF %</label><input id="s_irpf" type="number" inputmode="decimal" value="${Math.round(c.reservaIRPF*100)}"></div>
+    `:''}
     <button class="save" onclick="saveSettings()">Guardar</button>
     <button class="del" style="margin-top:18px" onclick="logout()">Cerrar sesión</button>
   </div>`);
@@ -813,10 +824,15 @@ async function saveSettings(){
   const inv=parseFloat(document.getElementById('s_inv').value)||0;
   const cap=parseFloat(document.getElementById('s_cap').value)||0;
   if(Math.abs(aho+inv+cap-100)>0.5){ alert(`El reparto suma ${aho+inv+cap}%, debe ser 100%.`); return; }
-  S.cfg.repartoAhorro=aho/100; S.cfg.repartoInversion=inv/100; S.cfg.repartoCaprichos=cap/100;
-  S.cfg.ivaDef=(parseFloat(document.getElementById('s_iva').value)||21)/100;
-  S.cfg.retDef=(parseFloat(document.getElementById('s_ret').value)||15)/100;
-  S.cfg.reservaIRPF=(parseFloat(document.getElementById('s_irpf').value)||20)/100;
+  const isJ=who==='jaime'; const suf=isJ?'J':'C';
+  S.cfg['repartoAhorro'+suf]=aho/100;
+  S.cfg['repartoInversion'+suf]=inv/100;
+  S.cfg['repartoCaprichos'+suf]=cap/100;
+  if(isJ){
+    S.cfg.ivaDef=(parseFloat(document.getElementById('s_iva').value)||21)/100;
+    S.cfg.retDef=(parseFloat(document.getElementById('s_ret').value)||15)/100;
+    S.cfg.reservaIRPF=(parseFloat(document.getElementById('s_irpf').value)||20)/100;
+  }
   await save(); closeSheet(); render();
 }
 
