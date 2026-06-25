@@ -306,7 +306,9 @@ const DEFAULT = {
   diariosJaime:[],
   diariosClaudia:[],
   fijosJaime:[],
-  fijosClaudia:[]
+  fijosClaudia:[],
+  ahorrosJaime:[],
+  ahorrosClaudia:[]
 };
 
 let S=null, who='jaime', tab='panel';
@@ -347,7 +349,7 @@ async function load(){
     S.cfg.repartoAhorroC=S.cfg.repartoAhorro; S.cfg.repartoInversionC=S.cfg.repartoInversion; S.cfg.repartoCaprichosC=S.cfg.repartoCaprichos;
   }
   delete S.cfg.repartoAhorro; delete S.cfg.repartoInversion; delete S.cfg.repartoCaprichos;
-  ['pareja','facturas','diariosJaime','diariosClaudia','fijosJaime','fijosClaudia'].forEach(k=>{ if(!S[k]) S[k]=[]; });
+  ['pareja','facturas','diariosJaime','diariosClaudia','fijosJaime','fijosClaudia','ahorrosJaime','ahorrosClaudia'].forEach(k=>{ if(!S[k]) S[k]=[]; });
   S.pareja.forEach(g=>{ if(!g.meses){ g.importeBase=(g.importe||0)*(PERIOD[g.period]||1); g.meses={}; delete g.importe; delete g.period; } });
   ['fijosJaime','fijosClaudia'].forEach(k=>S[k].forEach(f=>{ if(!f.meses){ f.importeBase=(f.importe||0)*(PERIOD[f.period]||1); f.meses={}; delete f.importe; delete f.period; } }));
 }
@@ -387,6 +389,8 @@ function fijosTotal(w){ return fijos(w).reduce((s,f)=>s+getMesImporte(f,currentS
 function diarios(w){ return w==='jaime'?S.diariosJaime:S.diariosClaudia; }
 function diariosDelMes(w){ return diarios(w).filter(d=>(d.fecha||'').startsWith(currentSelMonth)); }
 function diariosTotal(w){ return diariosDelMes(w).reduce((s,d)=>s+(+d.importe||0),0); }
+function ahorros(w){ return w==='jaime'?S.ahorrosJaime:S.ahorrosClaudia; }
+function ahorrosTotal(w){ return ahorros(w).reduce((s,a)=>s+(a.tipo==='retirada'?-(+a.importe||0):(+a.importe||0)),0); }
 function panel(w){
   const pm = parejaMes();
   const ij = ingresoJaime();
@@ -394,13 +398,13 @@ function panel(w){
   const partePareja = w==='jaime'?pm.parteJ:pm.parteC;
   const fijosMes = fijosTotal(w);
   const comprometido = fijosMes + partePareja;
-  const disponible = ingreso - comprometido;
+  const gastosDiarios = diariosTotal(w);
+  const disponible = ingreso - comprometido - gastosDiarios;
   const suf=w==='jaime'?'J':'C';
   const rA=S.cfg['repartoAhorro'+suf]||0, rI=S.cfg['repartoInversion'+suf]||0, rC=S.cfg['repartoCaprichos'+suf]||0;
   const ahorro = disponible*rA;
   const inversion = disponible*rI;
   const caprichos = disponible*rC;
-  const gastosDiarios = diariosTotal(w);
   const balance = w==='jaime'?pm.balanceJ:-pm.balanceJ;
   const facturasCount = S.facturas.filter(f=>f.cobrada).length;
   return {ingreso,partePareja,fijosMes,comprometido,disponible,ahorro,inversion,caprichos,gastosDiarios,balance,facturasCount,rA,rI,rC};
@@ -459,10 +463,11 @@ function viewPanel(){
       <div class="big">${EUR0(p.ingreso)}</div>
       ${heroSub}
       <div class="row2">
-        <div class="mini"><div class="l">Comprometido</div><div class="v">${EUR0(p.comprometido)}</div></div>
+        <div class="mini"><div class="l">Comprometido</div><div class="v" style="color:var(--red)">${EUR0(p.comprometido)}</div></div>
         <div class="mini"><div class="l">Disponible</div><div class="v" style="color:var(--green)">${EUR0(p.disponible)}</div></div>
       </div>
     </div>
+    ${ahorrosBadge(who)}
     ${liqHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
       <div class="stat"><div class="l">Fijos</div><div class="v ${isJ?'j':'c'}">${EUR0(p.fijosMes)}</div></div>
@@ -478,7 +483,8 @@ function viewPanel(){
         <div class="track"><i style="width:${Math.max(4,r[1]/maxR*100)}%;background:${r[2]}"></i></div>
       </div>`).join('')}
     </div>
-  </section>`;
+  </section>
+`;
 }
 
 function viewDiarios(){
@@ -794,6 +800,83 @@ async function saveFijo(id){
 }
 async function delFijo(id){
   const arr=fijos(who); const i=arr.findIndex(x=>x.id===id); if(i>-1)arr.splice(i,1);
+  await save(); closeSheet(); render();
+}
+
+// ahorros panel badge (compact) + detail sheet
+function ahorrosBadge(w){
+  const total = ahorrosTotal(w);
+  const list = ahorros(w);
+  const color = total>=0?'var(--green)':'var(--red)';
+  return `<div onclick="openAhorrosSheet('${w}')" style="display:flex;align-items:center;justify-content:space-between;
+      background:var(--panel);border:1px solid var(--line);border-radius:14px;
+      padding:12px 16px;margin-bottom:14px;cursor:pointer">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">🏦</span>
+      <div>
+        <div style="font-size:12px;color:var(--muted);font-weight:600">Mis ahorros</div>
+        <div style="font-size:20px;font-weight:800;color:${color};line-height:1.2">${EUR0(total)}</div>
+      </div>
+    </div>
+    <button onclick="event.stopPropagation();editAhorro(null)" style="background:var(--green-bg);border:1px solid var(--green);color:var(--green);padding:7px 14px;border-radius:10px;font-size:13px;font-weight:700">+ Añadir</button>
+  </div>`;
+}
+function openAhorrosSheet(w){
+  const total = ahorrosTotal(w);
+  const list = ahorros(w).slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||b.id.localeCompare(a.id));
+  const rows = list.length ? list.map(a=>{
+    const esR = a.tipo==='retirada';
+    return `<div class="li" onclick='editAhorro(${JSON.stringify(a.id)})'>
+      <div class="ico">${esR?'↑':'↓'}</div>
+      <div class="mid"><div class="t">${esc(a.concepto||a.tipo)}</div>
+        <div class="s">${fmtDate(a.fecha)}</div></div>
+      <div class="amt" style="color:${esR?'var(--red)':'var(--green)'}">${esR?'−':'+'}${EUR(+a.importe||0)}</div>
+    </div>`;
+  }).join('') : `<div class="empty">Sin movimientos aún.</div>`;
+  openSheet(shHead('Mis ahorros')+`<div style="padding:16px 18px 8px;text-align:center;border-bottom:1px solid var(--line)">
+    <div style="font-size:36px;font-weight:800;color:${total>=0?'var(--green)':'var(--red)'}">${EUR0(total)}</div>
+    <div style="font-size:12px;color:var(--dim);margin-top:4px">${list.length} movimiento${list.length!==1?'s':''}</div>
+  </div>
+  <div style="padding:10px 18px 18px">
+    <button class="save" onclick="closeSheet();editAhorro(null)">+ Añadir movimiento</button>
+  </div>
+  ${rows}`);
+}
+
+let _ahorroTipoSel='deposito';
+function editAhorro(id){
+  const a = id ? ahorros(who).find(x=>x.id===id) : null;
+  _ahorroTipoSel = a ? a.tipo : 'deposito';
+  const wName = who==='jaime'?'Jaime':'Claudia';
+  openSheet(shHead((id?'Editar':'Nuevo')+' ahorro · '+wName)+`<div class="form">
+    <div class="fld"><label>Tipo</label>
+      <div class="chips" id="ah_tipo">
+        <button class="${_ahorroTipoSel==='deposito'?'sel':''}" onclick="pickAhorroTipo(this,'deposito')">↓ Depósito</button>
+        <button class="${_ahorroTipoSel==='retirada'?'sel':''}" onclick="pickAhorroTipo(this,'retirada')">↑ Retirada</button>
+      </div>
+    </div>
+    <div class="two">
+      <div class="fld"><label>Importe €</label><input id="ah_imp" type="number" inputmode="decimal" step="0.01" value="${a?a.importe:''}" placeholder="0,00"></div>
+      <div class="fld"><label>Fecha</label><input id="ah_fec" type="date" value="${a?a.fecha:todayISO()}"></div>
+    </div>
+    <div class="fld"><label>Concepto</label><input id="ah_con" value="${a?esc(a.concepto):''}" placeholder="Nómina, fondo emergencia…"></div>
+    <button class="save" onclick='saveAhorro(${id?JSON.stringify(id):"null"})'>${id?'Guardar':'Añadir'}</button>
+    ${id?`<button class="del" onclick='delAhorro("${id}")'>Eliminar</button>`:''}
+  </div>`);
+}
+function pickAhorroTipo(btn,v){ _ahorroTipoSel=v; btn.parentNode.querySelectorAll('button').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); }
+async function saveAhorro(id){
+  const imp=parseFloat(document.getElementById('ah_imp').value);
+  if(isNaN(imp)||imp<=0){ document.getElementById('ah_imp').focus(); return; }
+  const obj={importe:imp,fecha:document.getElementById('ah_fec').value||todayISO(),
+    concepto:document.getElementById('ah_con').value.trim(),tipo:_ahorroTipoSel};
+  const arr=ahorros(who);
+  if(id){ const i=arr.findIndex(x=>x.id===id); arr[i]={...arr[i],...obj}; }
+  else arr.unshift({id:uid(),...obj});
+  await save(); closeSheet(); render();
+}
+async function delAhorro(id){
+  const arr=ahorros(who); const i=arr.findIndex(x=>x.id===id); if(i>-1)arr.splice(i,1);
   await save(); closeSheet(); render();
 }
 
