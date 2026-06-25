@@ -45,8 +45,8 @@
   .hero .row2{display:flex;gap:12px;margin-top:16px}
   .hero .mini{flex:1;background:rgba(255,255,255,.04);border-radius:12px;
     padding:10px 12px}
-  .hero .mini .l{font-size:11px;color:var(--muted)}
-  .hero .mini .v{font-size:18px;font-weight:700;margin-top:2px}
+  .hero .mini .l{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hero .mini .v{font-size:17px;font-weight:700;margin-top:2px;white-space:nowrap}
 
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;
@@ -453,8 +453,8 @@ function viewPanel(){
   ];
   const maxR=Math.max(...reparto.map(r=>r[1]),1);
   const ingresoLabel = isJ
-    ? `${isJ?'Ingreso neto':'Sueldo'} · ${p.facturasCount} factura${p.facturasCount!==1?'s':''}`
-    : `<span onclick="editSueldoClaudia()" style="cursor:pointer;border-bottom:1px dashed var(--muted)">Sueldo neto · editar</span>`;
+    ? `Ingreso · ${p.facturasCount} fact.`
+    : `<span onclick="editSueldoClaudia()" style="cursor:pointer;border-bottom:1px dashed var(--muted)">Sueldo · editar</span>`;
   return `
   <section>
     ${monthNavHTML()}
