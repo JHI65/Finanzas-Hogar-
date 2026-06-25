@@ -202,7 +202,6 @@
   <button data-t="diarios" onclick="go('diarios')"><span class="ic">≡</span>Diarios</button>
   <button data-t="fijos" onclick="go('fijos')"><span class="ic">◆</span>Fijos</button>
   <button data-t="pareja" onclick="go('pareja')"><span class="ic">⌂</span>Pareja</button>
-  <button data-t="facturas" onclick="go('facturas')"><span class="ic">€</span>Facturas</button>
 </div></div>
 
 <div class="scrim" id="scrim" onclick="closeSheet()"></div>
@@ -282,6 +281,7 @@ const CAT_COLORS = {'Alimentación':'#3ecf8e','Restaurantes':'#f0b429','Transpor
   'Suscripciones':'#ff8a65','Otros':'#8b919e'};
 
 const PERIOD = {'Mensual':1,'Anual':1/12,'Trimestral':1/3};
+function nextMonth(m){let[y,mo]=m.split('-').map(Number);mo++;if(mo>12){mo=1;y++;}return y+'-'+String(mo).padStart(2,'0');}
 
 // ---- default state from the Excel ----
 const DEFAULT = {
@@ -308,7 +308,8 @@ const DEFAULT = {
   fijosJaime:[],
   fijosClaudia:[],
   ahorrosJaime:[],
-  ahorrosClaudia:[]
+  ahorrosClaudia:[],
+  nominasClaudia:[]
 };
 
 let S=null, who='jaime', tab='panel';
@@ -362,7 +363,7 @@ async function load(){
     S.cfg.repartoAhorroC=S.cfg.repartoAhorro; S.cfg.repartoInversionC=S.cfg.repartoInversion; S.cfg.repartoCaprichosC=S.cfg.repartoCaprichos;
   }
   delete S.cfg.repartoAhorro; delete S.cfg.repartoInversion; delete S.cfg.repartoCaprichos;
-  ['pareja','facturas','diariosJaime','diariosClaudia','fijosJaime','fijosClaudia','ahorrosJaime','ahorrosClaudia'].forEach(k=>{ if(!S[k]) S[k]=[]; });
+  ['pareja','facturas','diariosJaime','diariosClaudia','fijosJaime','fijosClaudia','ahorrosJaime','ahorrosClaudia','nominasClaudia'].forEach(k=>{ if(!S[k]) S[k]=[]; });
   if(!S.liquidado) S.liquidado={};
   S.pareja.forEach(g=>{ if(!g.meses){ g.importeBase=(g.importe||0)*(PERIOD[g.period]||1); g.meses={}; delete g.importe; delete g.period; } if(g.mantener===undefined) g.mantener=true; });
   ['fijosJaime','fijosClaudia'].forEach(k=>S[k].forEach(f=>{ if(!f.meses){ f.importeBase=(f.importe||0)*(PERIOD[f.period]||1); f.meses={}; delete f.importe; delete f.period; } }));
@@ -373,21 +374,26 @@ async function save(){
 }
 
 // ---- computations (mirror Excel) ----
-function ingresoJaime(){
-  // neto = base - retención - reserva IRPF, solo facturas cobradas
-  return S.facturas.filter(f=>f.cobrada).reduce((s,f)=>{
-    const ret = f.base*(f.ret||0);
-    const reserva = f.base*(S.cfg.reservaIRPF||0);
-    return s + f.base - ret - reserva;
-  }, 0);
+function ingresoJaimeMes(month){
+  return S.facturas.filter(f=>f.cobrada&&(f.fecha||'').startsWith(month)).reduce((s,f)=>{
+    const ret=f.base*(f.ret||0);
+    const reserva=f.base*(S.cfg.reservaIRPF||0);
+    return s+f.base-ret-reserva;
+  },0);
 }
-function proporciones(){
-  const ij = ingresoJaime();
-  const tot = ij + (S.cfg.ingresoClaudia||0) || 1;
-  return { j:ij/tot, c:(S.cfg.ingresoClaudia||0)/tot };
+function ingresoClaudiaMes(month){
+  const noms=S.nominasClaudia.filter(n=>(n.fecha||'').startsWith(month));
+  if(noms.length) return noms.reduce((s,n)=>s+(+n.importe||0),0);
+  return S.cfg.ingresoClaudia||0;
 }
-function parejaMes(){
-  const m=currentSelMonth; const p=proporciones();
+function proporciones(month){
+  const ij=ingresoJaimeMes(month||currentSelMonth);
+  const ic=ingresoClaudiaMes(month||currentSelMonth);
+  const tot=ij+ic||1;
+  return {j:ij/tot, c:ic/tot};
+}
+function parejaMes(month){
+  const m=month||currentSelMonth; const p=proporciones(m);
   let totalMes=0,parteJ=0,parteC=0,bolsilloJ=0,compartidoBolsillo=0;
   parejaDelMes(m).forEach(g=>{
     const mes=getParejaImporte(g,m);
@@ -399,29 +405,52 @@ function parejaMes(){
   return {totalMes,parteJ,parteC,balanceJ,prop:p};
 }
 function fijos(w){ return w==='jaime'?S.fijosJaime:S.fijosClaudia; }
-function fijosTotal(w){ return fijos(w).reduce((s,f)=>s+getMesImporte(f,currentSelMonth),0); }
+function fijosTotal(w,month){ return fijos(w).reduce((s,f)=>s+getMesImporte(f,month||currentSelMonth),0); }
 function diarios(w){ return w==='jaime'?S.diariosJaime:S.diariosClaudia; }
-function diariosDelMes(w){ return diarios(w).filter(d=>(d.fecha||'').startsWith(currentSelMonth)); }
-function diariosTotal(w){ return diariosDelMes(w).reduce((s,d)=>s+(+d.importe||0),0); }
+function diariosDelMes(w,month){ return diarios(w).filter(d=>(d.fecha||'').startsWith(month||currentSelMonth)); }
+function diariosTotal(w,month){ return diariosDelMes(w,month).reduce((s,d)=>s+(+d.importe||0),0); }
+function earliestDataMonth(w){
+  const dates=[];
+  if(w==='jaime') S.facturas.filter(f=>f.cobrada&&f.fecha).forEach(f=>dates.push(f.fecha.slice(0,7)));
+  else S.nominasClaudia.filter(n=>n.fecha).forEach(n=>dates.push(n.fecha.slice(0,7)));
+  diarios(w).filter(d=>d.fecha).forEach(d=>dates.push(d.fecha.slice(0,7)));
+  fijos(w).forEach(f=>Object.keys(f.meses||{}).forEach(m=>dates.push(m)));
+  dates.sort();
+  return dates[0]||currentSelMonth;
+}
+function saldoAnteriorAcumulado(w,upToMonth){
+  const start=earliestDataMonth(w);
+  let saldo=0,m=start,guard=0;
+  while(m<upToMonth&&guard++<120){
+    const ing=w==='jaime'?ingresoJaimeMes(m):ingresoClaudiaMes(m);
+    const pm=parejaMes(m);
+    const partePareja=w==='jaime'?pm.parteJ:pm.parteC;
+    saldo+=ing-fijosTotal(w,m)-partePareja-diariosTotal(w,m);
+    m=nextMonth(m);
+  }
+  return saldo;
+}
 function ahorros(w){ return w==='jaime'?S.ahorrosJaime:S.ahorrosClaudia; }
 function ahorrosTotal(w){ return ahorros(w).reduce((s,a)=>s+(a.tipo==='retirada'?-(+a.importe||0):(+a.importe||0)),0); }
 function panel(w){
   const pm = parejaMes();
-  const ij = ingresoJaime();
-  const ingreso = w==='jaime' ? ij : (S.cfg.ingresoClaudia||0);
+  const ingreso = w==='jaime' ? ingresoJaimeMes(currentSelMonth) : ingresoClaudiaMes(currentSelMonth);
+  const saldoAnt = saldoAnteriorAcumulado(w, currentSelMonth);
   const partePareja = w==='jaime'?pm.parteJ:pm.parteC;
   const fijosMes = fijosTotal(w);
   const comprometido = fijosMes + partePareja;
   const gastosDiarios = diariosTotal(w);
-  const disponible = ingreso - comprometido - gastosDiarios;
+  const disponible = saldoAnt + ingreso - comprometido - gastosDiarios;
   const suf=w==='jaime'?'J':'C';
   const rA=S.cfg['repartoAhorro'+suf]||0, rI=S.cfg['repartoInversion'+suf]||0, rC=S.cfg['repartoCaprichos'+suf]||0;
   const ahorro = disponible*rA;
   const inversion = disponible*rI;
   const caprichos = disponible*rC;
   const balance = w==='jaime'?pm.balanceJ:-pm.balanceJ;
-  const facturasCount = S.facturas.filter(f=>f.cobrada).length;
-  return {ingreso,partePareja,fijosMes,comprometido,disponible,ahorro,inversion,caprichos,gastosDiarios,balance,facturasCount,rA,rI,rC};
+  const ingresoCount = w==='jaime'
+    ? S.facturas.filter(f=>f.cobrada&&(f.fecha||'').startsWith(currentSelMonth)).length
+    : S.nominasClaudia.filter(n=>(n.fecha||'').startsWith(currentSelMonth)).length;
+  return {ingreso,saldoAnt,partePareja,fijosMes,comprometido,disponible,ahorro,inversion,caprichos,gastosDiarios,balance,ingresoCount,rA,rI,rC};
 }
 
 // ---- rendering ----
@@ -435,17 +464,16 @@ function render(){
   document.querySelectorAll('.nav button').forEach(b=>
     b.classList.toggle('act', b.dataset.t===tab));
   document.getElementById('whoT').style.display =
-    (tab==='pareja'||tab==='facturas') ? 'none' : 'flex';
+    tab==='pareja' ? 'none' : 'flex';
   document.getElementById('fab').style.display =
-    (tab==='diarios'||tab==='fijos'||tab==='pareja'||tab==='facturas')?'block':'none';
-  const titles={panel:'Panel',diarios:'Gastos diarios',fijos:'Gastos fijos',pareja:'Gastos pareja',facturas:'Facturas'};
-  document.getElementById('title').textContent = titles[tab];
+    (tab==='diarios'||tab==='fijos'||tab==='pareja')?'block':'none';
+  const titles={panel:'Panel',diarios:'Gastos diarios',fijos:'Gastos fijos',pareja:'Gastos pareja'};
+  document.getElementById('title').textContent = titles[tab]||'Panel';
   const app=document.getElementById('app');
   if(tab==='panel') app.innerHTML=viewPanel();
   else if(tab==='diarios') app.innerHTML=viewDiarios();
   else if(tab==='fijos') app.innerHTML=viewFijos();
   else if(tab==='pareja') app.innerHTML=viewPareja();
-  else if(tab==='facturas') app.innerHTML=viewFacturas();
 }
 
 function viewPanel(){
@@ -479,24 +507,23 @@ function viewPanel(){
   ];
   const maxR=Math.max(...reparto.map(r=>r[1]),1);
   const ingresoLabel = isJ
-    ? `Ingreso · ${p.facturasCount} fact.`
-    : `<span onclick="editSueldoClaudia()" style="cursor:pointer;border-bottom:1px dashed var(--muted)">Sueldo · editar</span>`;
+    ? `Ingreso · ${p.ingresoCount} fact.`
+    : `Sueldo · ${p.ingresoCount} nóm.`;
+  const ingresoOnclick = isJ ? 'openFacturasSheet()' : 'openNominasSheet()';
   return `
   <section>
     ${monthNavHTML()}
     <div class="hero ${isJ?'j':'c'}">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between">
-        <div>
-          <div class="lab">Disponible · mes</div>
-          <div class="big" style="color:${p.disponible>=0?'var(--green)':'var(--red)'}">${EUR0(p.disponible)}</div>
-        </div>
-        <div style="text-align:right;padding-top:2px">
-          <div class="lab">Comprometido</div>
-          <div style="font-size:22px;font-weight:700;color:var(--red);white-space:nowrap">${EUR0(p.comprometido)}</div>
-        </div>
+      <div>
+        <div class="lab">Disponible</div>
+        <div class="big" style="color:${p.disponible>=0?'var(--green)':'var(--red)'}">${EUR0(p.disponible)}</div>
       </div>
       <div class="row2">
-        <div class="mini"><div class="l">${ingresoLabel}</div><div class="v">${EUR0(p.ingreso)}</div></div>
+        <div class="mini"><div class="l">Saldo anterior</div><div class="v" style="color:${p.saldoAnt>=0?'var(--green)':'var(--red)'}">${EUR0(p.saldoAnt)}</div></div>
+        <div class="mini" onclick="${ingresoOnclick}" style="cursor:pointer;active:opacity:.7"><div class="l" style="display:flex;align-items:center;gap:4px">${ingresoLabel}<span style="font-size:10px;opacity:.5">›</span></div><div class="v">${EUR0(p.ingreso)}</div></div>
+      </div>
+      <div class="row2" style="margin-top:8px">
+        <div class="mini"><div class="l">Comprometido</div><div class="v" style="color:var(--red)">${EUR0(p.comprometido)}</div></div>
         <div class="mini"><div class="l">Diarios</div><div class="v" style="color:var(--amber)">${EUR0(p.gastosDiarios)}</div></div>
       </div>
     </div>
@@ -655,7 +682,6 @@ function openAdd(){
   if(tab==='diarios') editDiario(null);
   else if(tab==='fijos') editFijo(null);
   else if(tab==='pareja') editPareja(null);
-  else if(tab==='facturas') editFactura(null);
 }
 
 // diario form
@@ -926,6 +952,84 @@ async function saveAhorro(id){
 }
 async function delAhorro(id){
   const arr=ahorros(who); const i=arr.findIndex(x=>x.id===id); if(i>-1)arr.splice(i,1);
+  await save(); closeSheet(); render();
+}
+
+// facturas sheet (abierto desde ingreso de Jaime)
+function openFacturasSheet(){
+  const list=S.facturas.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  let neto=0,pend=0;
+  list.forEach(f=>{
+    const total=f.base*(1+f.iva)-f.base*f.ret;
+    const reserva=f.base*S.cfg.reservaIRPF;
+    const n=f.base-f.base*f.ret-reserva;
+    if(f.cobrada) neto+=n; else pend+=total;
+  });
+  const rows=list.length?list.map(f=>{
+    const total=f.base*(1+f.iva)-f.base*f.ret;
+    return `<div class="li" onclick='editFacturaFromSheet(${JSON.stringify(f.id)})'>
+      <div class="ico">€</div>
+      <div class="mid"><div class="t">${esc(f.cliente)}</div>
+        <div class="s">${esc(f.concepto||'')} · ${fmtDate(f.fecha)}</div></div>
+      <div class="amt">${EUR0(total)}<small><span class="tag ${f.cobrada?'ok':'no'}">${f.cobrada?'Cobrada':'Pendiente'}</span></small></div>
+    </div>`;
+  }).join(''):`<div class="empty">Sin facturas.<br>Pulsa + para añadir una.</div>`;
+  openSheet(shHead('Facturas · Jaime')+`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 18px 12px">
+      <div class="stat"><div class="l">Neto cobrado</div><div class="v green">${EUR0(neto)}</div></div>
+      <div class="stat"><div class="l">Pendiente</div><div class="v amber">${EUR0(pend)}</div></div>
+    </div>
+    <div style="padding:0 18px 12px">
+      <button class="save" onclick="closeSheet();editFactura(null)">+ Nueva factura</button>
+    </div>
+    ${rows}`);
+}
+function editFacturaFromSheet(id){ closeSheet(); setTimeout(()=>editFactura(id),260); }
+
+// nóminas Claudia sheet
+function openNominasSheet(){
+  const list=S.nominasClaudia.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||b.id.localeCompare(a.id));
+  const total=list.reduce((s,n)=>s+(+n.importe||0),0);
+  const rows=list.length?list.map(n=>`
+    <div class="li" onclick='editNominaFromSheet(${JSON.stringify(n.id)})'>
+      <div class="ico">💼</div>
+      <div class="mid"><div class="t">${esc(n.concepto||'Nómina')}</div>
+        <div class="s">${fmtDate(n.fecha)}</div></div>
+      <div class="amt" style="color:var(--claudia)">${EUR(+n.importe||0)}</div>
+    </div>`).join(''):`<div class="empty">Sin nóminas registradas.<br>Pulsa + para añadir.</div>`;
+  openSheet(shHead('Nóminas · Claudia')+`
+    <div style="padding:16px 18px 8px;text-align:center;border-bottom:1px solid var(--line)">
+      <div style="font-size:36px;font-weight:800;color:var(--claudia)">${EUR0(total)}</div>
+      <div style="font-size:12px;color:var(--dim);margin-top:4px">${list.length} nómina${list.length!==1?'s':''} · total acumulado</div>
+    </div>
+    <div style="padding:10px 18px 18px">
+      <button class="save" onclick="closeSheet();editNomina(null)">+ Añadir nómina</button>
+    </div>
+    ${rows}`);
+}
+function editNominaFromSheet(id){ closeSheet(); setTimeout(()=>editNomina(id),260); }
+function editNomina(id){
+  const n=id?S.nominasClaudia.find(x=>x.id===id):null;
+  openSheet(shHead((id?'Editar':'Nueva')+' nómina · Claudia')+`<div class="form">
+    <div class="two">
+      <div class="fld"><label>Importe neto €</label><input id="nm_imp" type="number" inputmode="decimal" step="0.01" value="${n?n.importe:''}" placeholder="0,00"></div>
+      <div class="fld"><label>Fecha</label><input id="nm_fec" type="date" value="${n?n.fecha:todayISO()}"></div>
+    </div>
+    <div class="fld"><label>Concepto</label><input id="nm_con" value="${n?esc(n.concepto):''}" placeholder="Nómina enero, paga extra…"></div>
+    <button class="save" onclick='saveNomina(${id?JSON.stringify(id):"null"})'>${id?'Guardar':'Añadir nómina'}</button>
+    ${id?`<button class="del" onclick='delNomina(${JSON.stringify(id)})'>Eliminar</button>`:''}
+  </div>`);
+}
+async function saveNomina(id){
+  const imp=parseFloat(document.getElementById('nm_imp').value);
+  if(isNaN(imp)||imp<=0){ document.getElementById('nm_imp').focus(); return; }
+  const obj={importe:imp,fecha:document.getElementById('nm_fec').value||todayISO(),concepto:document.getElementById('nm_con').value.trim()};
+  if(id){ const i=S.nominasClaudia.findIndex(x=>x.id===id); S.nominasClaudia[i]={...S.nominasClaudia[i],...obj}; }
+  else S.nominasClaudia.unshift({id:uid(),...obj});
+  await save(); closeSheet(); render();
+}
+async function delNomina(id){
+  const i=S.nominasClaudia.findIndex(x=>x.id===id); if(i>-1)S.nominasClaudia.splice(i,1);
   await save(); closeSheet(); render();
 }
 
