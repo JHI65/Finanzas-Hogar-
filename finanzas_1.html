@@ -440,10 +440,17 @@ function viewPanel(){
   let liqHtml='';
   if(Math.abs(bal)>0.5){
     const other=isJ?'Claudia':'Jaime';
+    const liquidarBtn = !balPos
+      ? `<button onclick="liquidarDeuda(${Math.abs(bal).toFixed(2)},'${other}')"
+           style="margin-top:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+           color:var(--txt);padding:8px 20px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+           Liquidar deuda</button>`
+      : '';
     liqHtml = `<div class="liq ${balPos?'pos':'neg'}">
       <div class="l">Liquidación con ${other}</div>
       <div class="v">${EUR(Math.abs(bal))}</div>
       <div class="who">${balPos?`${other} te debe`:`Debes a ${other}`}</div>
+      ${liquidarBtn}
     </div>`;
   }
   const reparto = [
@@ -880,6 +887,14 @@ async function saveAhorro(id){
 async function delAhorro(id){
   const arr=ahorros(who); const i=arr.findIndex(x=>x.id===id); if(i>-1)arr.splice(i,1);
   await save(); closeSheet(); render();
+}
+
+// liquidar deuda
+async function liquidarDeuda(importe, other){
+  if(!confirm(`¿Registrar pago de ${EUR(importe)} a ${other} como gasto diario?`)) return;
+  const arr = diarios(who);
+  arr.unshift({id:uid(), importe, fecha:todayISO(), concepto:`Liquidación con ${other}`, categoria:'Otros'});
+  await save(); render();
 }
 
 // settings / config
