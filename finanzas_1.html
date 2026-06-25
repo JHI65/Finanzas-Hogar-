@@ -326,6 +326,10 @@ function getMesImporte(item,month){
   const prev=Object.keys(item.meses).filter(k=>k<month).sort().pop();
   return prev!==undefined ? item.meses[prev] : (item.importeBase||0);
 }
+function getParejaImporte(item,month){
+  if(!item.meses) return 0;
+  return item.meses[month]!==undefined ? item.meses[month] : 0;
+}
 const monthNavHTML=()=>`<div class="month-nav">
   <button onclick="shiftMonth(-1)">‹</button>
   <span class="mn-label">${monthLabel(currentSelMonth)}</span>
@@ -377,7 +381,7 @@ function parejaMes(){
   const m=currentSelMonth; const p=proporciones();
   let totalMes=0,parteJ=0,parteC=0,bolsilloJ=0,compartidoBolsillo=0;
   S.pareja.forEach(g=>{
-    const mes=getMesImporte(g,m);
+    const mes=getParejaImporte(g,m);
     totalMes+=mes; parteJ+=mes*p.j; parteC+=mes*p.c;
     if(g.pagador==='Jaime'){ bolsilloJ+=mes; compartidoBolsillo+=mes; }
     else if(g.pagador==='Claudia'){ compartidoBolsillo+=mes; }
@@ -549,7 +553,7 @@ function donutSVG(cats,total){
 function viewPareja(){
   const pm=parejaMes(); const p=pm.prop; const m=currentSelMonth;
   const rows = S.pareja.map(g=>{
-    const mes=getMesImporte(g,m);
+    const mes=getParejaImporte(g,m);
     const tagC=g.pagador==='Jaime'?'j':g.pagador==='Claudia'?'c':'k';
     return `<div class="li" onclick='editPareja(${JSON.stringify(g.id)})'>
       <div class="ico">🏠</div>
@@ -685,7 +689,7 @@ let _pagSel='Conjunta';
 function editPareja(id){
   const g=id?S.pareja.find(x=>x.id===id):null;
   _pagSel=g?g.pagador:'Conjunta';
-  const m=currentSelMonth; const amt=g?getMesImporte(g,m):'';
+  const m=currentSelMonth; const amt=g?(g.meses&&g.meses[m]!==undefined?g.meses[m]:''):'';
   openSheet(shHead((id?'Editar':'Nuevo')+' gasto pareja · '+monthLabel(m))+`<div class="form">
     <div class="fld"><label>Concepto</label><input id="p_con" value="${g?esc(g.concepto):''}" placeholder="Alquiler, luz…"></div>
     <div class="fld"><label>Importe ${monthLabel(m)} €</label>
