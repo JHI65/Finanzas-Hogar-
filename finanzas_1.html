@@ -287,8 +287,8 @@ function nextMonth(m){let[y,mo]=m.split('-').map(Number);mo++;if(mo>12){mo=1;y++
 const DEFAULT = {
   cfg:{
     ingresoClaudia:1500,
-    repartoAhorroJ:0.4, repartoInversionJ:0.3, repartoCaprichosJ:0.3,
-    repartoAhorroC:0.4, repartoInversionC:0.3, repartoCaprichosC:0.3,
+    repartoGastosVidaJ:0.70, repartoAhorroInvJ:0.20, repartoLibreJ:0.10,
+    repartoGastosVidaC:0.70, repartoAhorroInvC:0.20, repartoLibreC:0.10,
     ivaDef:0.21, retDef:0.15, reservaIRPF:0.2
   },
   pareja:[
@@ -363,6 +363,15 @@ async function load(){
     S.cfg.repartoAhorroC=S.cfg.repartoAhorro; S.cfg.repartoInversionC=S.cfg.repartoInversion; S.cfg.repartoCaprichosC=S.cfg.repartoCaprichos;
   }
   delete S.cfg.repartoAhorro; delete S.cfg.repartoInversion; delete S.cfg.repartoCaprichos;
+  // migrate old individual reparto keys to 70/20/10 categories
+  ['J','C'].forEach(s=>{
+    if(S.cfg['repartoGastosVida'+s]===undefined){
+      S.cfg['repartoGastosVida'+s]=0.70;
+      S.cfg['repartoAhorroInv'+s]=0.20;
+      S.cfg['repartoLibre'+s]=0.10;
+    }
+    delete S.cfg['repartoAhorro'+s]; delete S.cfg['repartoInversion'+s]; delete S.cfg['repartoCaprichos'+s];
+  });
   ['pareja','facturas','diariosJaime','diariosClaudia','fijosJaime','fijosClaudia','ahorrosJaime','ahorrosClaudia','nominasClaudia'].forEach(k=>{ if(!S[k]) S[k]=[]; });
   if(!S.liquidado) S.liquidado={};
   S.pareja.forEach(g=>{ if(!g.meses){ g.importeBase=(g.importe||0)*(PERIOD[g.period]||1); g.meses={}; delete g.importe; delete g.period; } if(g.mantener===undefined) g.mantener=true; });
@@ -454,18 +463,21 @@ function panel(w){
   const fijosMes = fijosTotal(w);
   const ivaQ = w==='jaime' ? ivaAcumuladoTrimestre(currentSelMonth) : 0;
   const comprometido = fijosMes + partePareja;
+  const sueldo = saldoAnt + ingreso - comprometido;
   const gastosDiarios = diariosTotal(w);
-  const disponible = saldoAnt + ingreso - comprometido - gastosDiarios;
   const suf=w==='jaime'?'J':'C';
-  const rA=S.cfg['repartoAhorro'+suf]||0, rI=S.cfg['repartoInversion'+suf]||0, rC=S.cfg['repartoCaprichos'+suf]||0;
-  const ahorro = disponible*rA;
-  const inversion = disponible*rI;
-  const caprichos = disponible*rC;
+  const rGV=S.cfg['repartoGastosVida'+suf]||0.70;
+  const rAI=S.cfg['repartoAhorroInv'+suf]||0.20;
+  const rLib=S.cfg['repartoLibre'+suf]||0.10;
+  const gastosVida = sueldo * rGV;
+  const ahorroInv = sueldo * rAI;
+  const libre = sueldo * rLib;
+  const gastosVidaRestante = gastosVida - gastosDiarios;
   const balance = w==='jaime'?pm.balanceJ:-pm.balanceJ;
   const ingresoCount = w==='jaime'
     ? S.facturas.filter(f=>f.cobrada&&(f.fecha||'').startsWith(currentSelMonth)).length
     : S.nominasClaudia.filter(n=>(n.fecha||'').startsWith(currentSelMonth)).length;
-  return {ingreso,saldoAnt,partePareja,fijosMes,ivaQ,comprometido,disponible,ahorro,inversion,caprichos,gastosDiarios,balance,ingresoCount,rA,rI,rC};
+  return {ingreso,saldoAnt,partePareja,fijosMes,ivaQ,comprometido,sueldo,gastosDiarios,gastosVida,ahorroInv,libre,gastosVidaRestante,balance,ingresoCount,rGV,rAI,rLib};
 }
 
 // ---- rendering ----
@@ -515,12 +527,6 @@ function viewPanel(){
       ${checkBtn}
     </div>`;
   }
-  const reparto = [
-    ['Ahorro',p.ahorro,'var(--green)',p.rA],
-    ['Inversión',p.inversion,'var(--purple)',p.rI],
-    ['Caprichos',p.caprichos,'var(--amber)',p.rC]
-  ];
-  const maxR=Math.max(...reparto.map(r=>r[1]),1);
   const ingresoLabel = isJ
     ? `Ingreso · ${p.ingresoCount} fact.`
     : `Sueldo · ${p.ingresoCount} nóm.`;
@@ -530,16 +536,16 @@ function viewPanel(){
     ${monthNavHTML()}
     <div class="hero ${isJ?'j':'c'}">
       <div>
-        <div class="lab">Disponible</div>
-        <div class="big" style="color:${p.disponible>=0?'var(--green)':'var(--red)'}">${EUR0(p.disponible)}</div>
+        <div class="lab">Sueldo personal</div>
+        <div class="big" style="color:${p.sueldo>=0?'var(--green)':'var(--red)'}">${EUR0(p.sueldo)}</div>
       </div>
       <div class="row2">
         <div class="mini"><div class="l">Saldo anterior</div><div class="v" style="color:${p.saldoAnt>=0?'var(--green)':'var(--red)'}">${EUR0(p.saldoAnt)}</div></div>
-        <div class="mini" onclick="${ingresoOnclick}" style="cursor:pointer;active:opacity:.7"><div class="l" style="display:flex;align-items:center;gap:4px">${ingresoLabel}<span style="font-size:10px;opacity:.5">›</span></div><div class="v">${EUR0(p.ingreso)}</div></div>
+        <div class="mini" onclick="${ingresoOnclick}" style="cursor:pointer"><div class="l" style="display:flex;align-items:center;gap:4px">${ingresoLabel}<span style="font-size:10px;opacity:.5">›</span></div><div class="v">${EUR0(p.ingreso)}</div></div>
       </div>
       <div class="row2" style="margin-top:8px">
         <div class="mini"><div class="l">Comprometido</div><div class="v" style="color:var(--red)">${EUR0(p.comprometido)}</div></div>
-        <div class="mini"><div class="l">Diarios</div><div class="v" style="color:var(--amber)">${EUR0(p.gastosDiarios)}</div></div>
+        <div class="mini"><div class="l">Diarios gastados</div><div class="v" style="color:var(--amber)">${EUR0(p.gastosDiarios)}</div></div>
       </div>
     </div>
     ${isJ&&p.ivaQ>0?`<div style="background:var(--amber-bg);border:1px solid #4a3808;
@@ -560,12 +566,24 @@ function viewPanel(){
     ${liqHtml}
   </section>
   <section>
-    <p class="eyebrow">Reparto del disponible</p>
+    <p class="eyebrow">Distribución · Sueldo personal</p>
     <div class="card">
-      ${reparto.map(r=>`<div class="barrow">
-        <div class="top"><span>${r[0]} · ${PCT(r[3])}</span><b>${EUR0(r[1])}</b></div>
-        <div class="track"><i style="width:${Math.max(4,r[1]/maxR*100)}%;background:${r[2]}"></i></div>
-      </div>`).join('')}
+      <div class="barrow">
+        <div class="top"><span>Gastos de vida · ${PCT(p.rGV)}</span><b>${EUR0(p.gastosVida)}</b></div>
+        <div class="track"><i style="width:${p.gastosVida>0?Math.min(100,Math.max(2,p.gastosDiarios/p.gastosVida*100)):2}%;background:${p.gastosDiarios>p.gastosVida?'var(--red)':'var(--green)'}"></i></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:5px">
+          <span>Gastado ${EUR0(p.gastosDiarios)}</span>
+          <span style="color:${p.gastosVidaRestante>=0?'var(--green)':'var(--red)'}">Queda ${EUR0(p.gastosVidaRestante)}</span>
+        </div>
+      </div>
+      <div class="barrow">
+        <div class="top"><span>Ahorro / Inversión · ${PCT(p.rAI)}</span><b style="color:var(--purple)">${EUR0(p.ahorroInv)}</b></div>
+        <div class="track"><i style="width:${p.sueldo>0?100:2}%;background:var(--purple)"></i></div>
+      </div>
+      <div class="barrow">
+        <div class="top"><span>Libre · ${PCT(p.rLib)}</span><b style="color:var(--amber)">${EUR0(p.libre)}</b></div>
+        <div class="track"><i style="width:${p.sueldo>0?100:2}%;background:var(--amber)"></i></div>
+      </div>
     </div>
   </section>
 `;
@@ -1074,11 +1092,12 @@ async function liquidarDeuda(importe, other){
 function openSettings(){
   const c=S.cfg; const isJ=who==='jaime'; const suf=isJ?'J':'C'; const name=isJ?'Jaime':'Claudia';
   openSheet(shHead('Configuración · '+name)+`<div class="form">
-    <p class="eyebrow">Reparto del disponible · ${name}</p>
+    <p class="eyebrow">Distribución del sueldo · ${name}</p>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Los % se aplican al sueldo personal (ingreso − comprometido). Deben sumar 100%.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-      <div class="fld"><label>Ahorro %</label><input id="s_aho" type="number" inputmode="decimal" value="${Math.round((c['repartoAhorro'+suf]||0)*100)}"></div>
-      <div class="fld"><label>Inversión %</label><input id="s_inv" type="number" inputmode="decimal" value="${Math.round((c['repartoInversion'+suf]||0)*100)}"></div>
-      <div class="fld"><label>Caprichos %</label><input id="s_cap" type="number" inputmode="decimal" value="${Math.round((c['repartoCaprichos'+suf]||0)*100)}"></div>
+      <div class="fld"><label>Gastos de vida %</label><input id="s_gv" type="number" inputmode="decimal" value="${Math.round((c['repartoGastosVida'+suf]||0.70)*100)}"></div>
+      <div class="fld"><label>Ahorro / Inv. %</label><input id="s_ai" type="number" inputmode="decimal" value="${Math.round((c['repartoAhorroInv'+suf]||0.20)*100)}"></div>
+      <div class="fld"><label>Libre %</label><input id="s_lib" type="number" inputmode="decimal" value="${Math.round((c['repartoLibre'+suf]||0.10)*100)}"></div>
     </div>
     ${isJ?`
     <p class="eyebrow" style="margin-top:16px">Fiscal · autónomo</p>
@@ -1093,14 +1112,14 @@ function openSettings(){
   </div>`);
 }
 async function saveSettings(){
-  const aho=parseFloat(document.getElementById('s_aho').value)||0;
-  const inv=parseFloat(document.getElementById('s_inv').value)||0;
-  const cap=parseFloat(document.getElementById('s_cap').value)||0;
-  if(Math.abs(aho+inv+cap-100)>0.5){ alert(`El reparto suma ${aho+inv+cap}%, debe ser 100%.`); return; }
+  const gv=parseFloat(document.getElementById('s_gv').value)||0;
+  const ai=parseFloat(document.getElementById('s_ai').value)||0;
+  const lib=parseFloat(document.getElementById('s_lib').value)||0;
+  if(Math.abs(gv+ai+lib-100)>0.5){ alert(`La distribución suma ${gv+ai+lib}%, debe ser 100%.`); return; }
   const isJ=who==='jaime'; const suf=isJ?'J':'C';
-  S.cfg['repartoAhorro'+suf]=aho/100;
-  S.cfg['repartoInversion'+suf]=inv/100;
-  S.cfg['repartoCaprichos'+suf]=cap/100;
+  S.cfg['repartoGastosVida'+suf]=gv/100;
+  S.cfg['repartoAhorroInv'+suf]=ai/100;
+  S.cfg['repartoLibre'+suf]=lib/100;
   if(isJ){
     S.cfg.ivaDef=(parseFloat(document.getElementById('s_iva').value)||21)/100;
     S.cfg.retDef=(parseFloat(document.getElementById('s_ret').value)||15)/100;
